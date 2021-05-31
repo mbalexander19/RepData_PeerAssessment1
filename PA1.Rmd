@@ -1,0 +1,170 @@
+---
+title: "Reproducible Research: Peer Assessment 1"
+output: 
+  html_document:
+    keep_md: true
+---
+
+This is an exploratory analysis to examine data collected in October and November 2012 from a personal activity monitoring device. The data consist of one anonymous individual's step counts at five-minute intervals throughout the day.
+
+For the initial analysis, I simply analyze existing data, excluding missing values, to attempt to find the mean total number of steps per day and the average daily pattern. Later in the analysis, I imputed missing values and attempted to identify differences between weekends and weekdays.
+
+I used the knitr, tidyverse, and ggplot2 packages in processing, analyzing, and displaying the data.
+```{r, echo = TRUE, message = FALSE}
+library(knitr)
+library(tidyverse)
+library(ggplot2)
+```
+
+## Loading and preprocessing the data
+
+First, I downloaded and unzipped the data into my working folder. I downloaded the dataset I worked with from the URL below on 31 May 2021 at 15:27 GMT.
+```{r, echo = TRUE}
+#file download
+fileUrl <- 'https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip'
+
+if(!file.exists('./dlData')){
+  dir.create('./dlData')
+  download.file(url = fileUrl, destfile = './dlData/dlData.zip')
+}
+
+#unzips file if not done already
+if(!file.exists('./extractedData')){
+  dir.create('./extractedData')
+  unzip('./dlData/dlData.zip', exdir = './extractedData')
+}
+
+#read csv
+activityData <- read.csv('./extractedData/activity.csv', header = TRUE)
+```
+
+Initally, let's just take a look at the data.
+```{r}
+dim(activityData)
+head(activityData)
+```
+
+Next, I preprocessed the data to make it easier to work with in my further analysis. First, I converted the date column into objects of the Date class.
+```{r, echo = TRUE}
+#convert dates to objects of date class
+activityData$date <- as.Date(activityData$date, format = '%Y-%m-%d')
+```
+
+## What is mean total number of steps taken per day?
+
+I summarize the data and take the sum of steps for each day, removing unknown values. The table itself is a jumble of numbers, so I summarize it in a histogram. I also mark the mean steps per day with a red line and median with a blue line.
+```{r}
+#process data to group by day
+activityByDay <- group_by(activityData, date)
+
+#sum steps by day
+stepsByDay <- summarize(activityByDay, totalSteps = sum(steps, na.rm = TRUE))
+
+#create histogram
+hist(stepsByDay$totalSteps, breaks = 12, main = 'Steps per Day, Oct-Nov 2012',
+    xlab = 'Steps/Day', ylab = 'Frequency')
+
+#add lines
+abline(v = mean(stepsByDay$totalSteps), col = 'red', lwd = 3)
+abline(v = median(stepsByDay$totalSteps), col = 'blue', lwd = 3)
+```
+
+The mean and median values of steps per day are displayed below.
+```{r}
+mean(stepsByDay$totalSteps)
+
+median(stepsByDay$totalSteps)
+```
+
+## What is the average daily activity pattern?
+Now I am looking at the overall data for each five minute interval. First, I need to group the data by each interval rather than by date as in the previous example.
+```{r}
+#process data to group by interval
+activityByInterval <- group_by(activityData, interval)
+```
+
+Then I take the mean of each five minute interval averaged across all days and save this for use in plotting. Again, I remove the unknown values. Then, I construct a time series plot to display the daily trend.
+```{r}
+#mean of each interval
+StepsByInterval <- summarize(activityByInterval, avgSteps = mean(steps, na.rm = TRUE))
+
+#construct time-series plot
+plot(StepsByInterval$interval, StepsByInterval$avgSteps, type = 'l',
+     main = 'Average Steps in Oct-Nov 2012 by Time of Day', xlab = 'Time (24 hr clock)',
+     ylab = 'Avg Steps')
+```
+
+When was our subject most active during the day? The code below breaks out the interval of higest activity.
+```{r}
+maxRow <- which.max(StepsByInterval$avgSteps)
+StepsByInterval$interval[maxRow]
+```
+
+Mr. or Ms. Anonymous took the most steps between 08:35 and 08:40 every day.
+
+## Imputing missing values
+How much data are we missing in the set? First, we calculate the total number of missing values.
+```{r}
+sum(is.na(activityData$steps))
+```
+
+We saw earlier that there were around 24000 observations - that means that almost 10% of the data is missing.
+
+Now we replace the NAs with the mean value for all steps. The median for this dataset is 0, so it does not give us any meaningful data.
+
+
+```{r}
+#copy dataframe
+activityDataImputed <- activityData
+
+#replaces NAs with average value for given interval
+activityDataImputed$steps <- replace_na(activityDataImputed$steps, 
+   mean(activityData$steps, na.rm = TRUE))
+
+#check our work, make sure no NAs remain
+sum(is.na(activityDataImputed$steps))
+```
+
+Now we go back to our first question and see how imputing some of the data changed our overall day-by-day steps. I expect it will increase some since we are effectively replacing some 0s with higher numbers.
+
+```{r}
+#process data to group by day
+activityByDayImputed <- group_by(activityDataImputed, date)
+
+#sum steps by day
+stepsByDayImputed <- summarize(activityByDayImputed, totalSteps = sum(steps))
+
+#create histogram
+hist(stepsByDayImputed$totalSteps, breaks = 12, main = 'Steps per Day, Oct-Nov 2012 with Imputed Data',
+    xlab = 'Steps/Day', ylab = 'Frequency')
+
+#add lines
+abline(v = mean(stepsByDayImputed$totalSteps), col = 'red', lwd = 3)
+abline(v = median(stepsByDayImputed$totalSteps), col = 'blue', lwd = 3)
+```
+
+And my expectation was correct. The mean and median both increased.
+
+And the mean and median:
+```{r}
+mean(stepsByDayImputed$totalSteps)
+
+median(stepsByDayImputed$totalSteps)
+```
+
+## Are there differences in activity patterns between weekdays and weekends?
+
+First we create a new factor variable with two levels, weekday and weekend.
+```{r}
+activityDataImputed$day <- as.factor(weekdays(activityDataImputed$date))
+activityDataImputed$weekday <- as.factor(ifelse((activityDataImputed$day == 'Saturday'
+  | activityDataImputed$day == 'Sunday'), 'weekend', 'weekday'))
+head(activityDataImputed)
+```
+
+Then we make a plot comparing weekdays with weekends.
+```{r}
+ad_wd <- aggregate(steps ~ interval + weekday, activityDataImputed, mean)
+ggplot(data = ad_wd, aes(color = weekday, x = interval, y = steps)) +
+  geom_line() + labs(x = '5 minute intervals', y = 'Steps', title = 'Weekend vs.
+  Weekday Steps') + facet_grid(weekday ~ .)
