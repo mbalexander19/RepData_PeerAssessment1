@@ -168,3 +168,4 @@ ad_wd <- aggregate(steps ~ interval + weekday, activityDataImputed, mean)
 ggplot(data = ad_wd, aes(color = weekday, x = interval, y = steps)) +
   geom_line() + labs(x = '5 minute intervals', y = 'Steps', title = 'Weekend vs.
   Weekday Steps') + facet_grid(weekday ~ .)
+```
